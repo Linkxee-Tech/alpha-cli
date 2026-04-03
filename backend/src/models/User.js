@@ -14,13 +14,13 @@ const userSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true, // Account level password constraint
+      required: true,
     },
-    // Paper trading simulated balances
     simulatedBalance: {
       type: Number,
-      default: 100000, // Starts with $100,000 in paper trading balance
-    }
+      default: Number(process.env.INITIAL_SIMULATED_BALANCE) || 100000,
+    },
+
   },
   { timestamps: true }
 );

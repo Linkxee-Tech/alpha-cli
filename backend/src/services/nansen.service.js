@@ -1,17 +1,12 @@
-// Mocking/Wrapping Nansen API endpoints for the purpose of the build challenge
-// We will hit 10 unique Nansen API endpoints for Agent tools to utilize.
-// Assumes Node structure and env variable: NANSEN_API_KEY
-
 class NansenService {
   constructor() {
-    this.baseURL = 'https://api.nansen.ai/v1'; // Standard API base config
+    this.baseURL = process.env.NANSEN_API_URL || 'https://api.nansen.ai/v1';
     this.apiKey = process.env.NANSEN_API_KEY;
   }
 
   async fetchFromNansen(endpoint, params = {}) {
-    if(!this.apiKey) {
-      // Return mocked responses if no API key is set to allow testing
-      return this._getMockedResponse(endpoint);
+    if (!this.apiKey) {
+      throw new Error('NANSEN_API_KEY is required but not provided in environment.');
     }
 
     const url = new URL(`${this.baseURL}${endpoint}`);
@@ -25,7 +20,7 @@ class NansenService {
     });
 
     if (!response.ok) {
-        throw new Error(`Nansen API returned ${response.status}`);
+      throw new Error(`Nansen API returned ${response.status}`);
     }
 
     return await response.json();
@@ -79,28 +74,6 @@ class NansenService {
   // 10. Macro Signals / Token God Mode snapshot
   async getMacroSignals(tokenId) {
     return this.fetchFromNansen(`/token/${tokenId}/macro-signals`);
-  }
-
-  // Provides mocked data for demonstration if API keys are not present
-  _getMockedResponse(endpoint) {
-    if (endpoint.includes('/trending/tokens')) {
-       return [
-          { symbol: 'SOL', name: 'Solana', price: 145.2, trendScore: 98, isHot: true },
-          { symbol: 'ETH', name: 'Ethereum', price: 3804.1, trendScore: 85, isHot: false },
-          { symbol: 'JUP', name: 'Jupiter', price: 1.2, trendScore: 78, isHot: false }
-       ];
-    }
-    if (endpoint.includes('/smart-money/token-flows')) {
-       return [
-          { symbol: 'SOL', inflow: 15400000, colorIndicator: 'GREEN' }, // Highly trending
-          { symbol: 'WIF', inflow: -200000, colorIndicator: 'ORANGE' }  // Not so trending
-       ];
-    }
-    if (endpoint.includes('/wallet/')) {
-        return { totalValue: 42000, tokens: [{ symbol: 'USDC', balance: 14000 }, { symbol: 'SOL', balance: 200 }]};
-    }
-    // Generic robust fallback mock
-    return { mockStatus: "success", generatedForEndpoint: endpoint, _note: "Set NANSEN_API_KEY in backend .env to use real data." };
   }
 }
 
