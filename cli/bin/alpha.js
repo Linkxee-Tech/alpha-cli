@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+require('dotenv').config();
 const { Command } = require('commander');
 const chalk = require('chalk');
 const gradient = require('gradient-string');
@@ -6,16 +7,12 @@ const Table = require('cli-table3');
 const { authenticateViaBrowser, getToken, clearToken } = require('../utils/auth');
 
 const program = new Command();
-const BACKEND_URL = 'http://localhost:4000/api';
+const BACKEND_URL = process.env.ALPHA_BACKEND_URL || 'https://alpha-cli.onrender.com/api';
 
 program
-  .name('alpha')
-  .description('Alpha CLI – Autonomous Agent Onchain Toolkit (Powered by Nansen)')
-  .version('1.0.0');
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────────────────────────────────────
+    .name('alpha')
+    .description('Alpha CLI – Autonomous Agent Onchain Toolkit (Powered by Nansen)')
+    .version('1.0.0');
 
 const checkAuth = () => {
     const token = getToken();
@@ -57,9 +54,6 @@ const buildMarketTable = (items, cType) => {
     console.log(table.toString());
 };
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STATUS COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('status')
     .description('Check authentication status and backend health')
@@ -77,19 +71,17 @@ program
         }
 
         // Backend health
+        const healthUrl = `${BACKEND_URL.replace(/\/api$/, '')}/health`;
         try {
-            const { data } = await axios.get(`http://localhost:4000/health`, { timeout: 3000 });
+            const { data } = await axios.get(healthUrl, { timeout: 3000 });
             console.log(chalk.green('  ✅ Backend online') + chalk.grey(`  (${data.timestamp})`));
         } catch {
-            console.log(chalk.red('  ❌ Backend offline') + chalk.grey('  — start it with `npm run dev` in /backend'));
+            console.log(chalk.red('  ❌ Backend offline') + chalk.grey(`  — check your BACKEND_URL or start it with \`npm run dev\` in /backend`));
         }
 
         console.log('');
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGIN COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('login')
     .description('Authenticate via Phantom Wallet through the browser')
@@ -103,9 +95,6 @@ program
         }
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOGOUT COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('logout')
     .description('Clear the stored authentication session')
@@ -114,15 +103,14 @@ program
         console.log(chalk.yellow('\n👋 Logged out. Your JWT has been cleared.\n'));
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// MARKET COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('market')
     .description('Show trending assets powered by Nansen smart-money data')
     .option('-c, --crypto', 'Trending crypto from Nansen (default)')
     .option('-s, --sp500', 'Trending S&P 500 assets via Yahoo Finance')
     .option('-n, --nsd', 'Trending NASDAQ assets via Yahoo Finance')
+    .option('-f, --nft', 'NFT Market Indexes (Nansen)')
+    .option('-m, --macro', 'Smart Money Holdings \u0026 Macro (Nansen)')
     .action(async (options) => {
         const token = checkAuth();
         const axios = require('axios');
@@ -131,7 +119,24 @@ program
         let cType = 'CRYPTO';
 
         if (options.sp500) { url = `${BACKEND_URL}/market/tradfi/sp500`; cType = 'S&P 500'; }
-        else if (options.nsd) { url = `${BACKEND_URL}/market/tradfi/nsd`;  cType = 'NASDAQ'; }
+        else if (options.nsd) { url = `${BACKEND_URL}/market/tradfi/nsd`; cType = 'NASDAQ'; }
+        else if (options.nft || options.macro) {
+            console.log(chalk.cyan(`\n🔍 Fetching Nansen Market Macro Insights...`));
+            try {
+                const { data } = await axios.get(`${BACKEND_URL}/market/macro`, { headers: authHeaders(token) });
+                if (options.nft) {
+                    console.log(gradient.atlas(`\n─── Nansen NFT Indexes ──────────────────────────`));
+                    console.log(JSON.stringify(data.nftIndexes, null, 2));
+                } else {
+                    console.log(gradient.atlas(`\n─── Smart Money Holdings ─────────────────────────`));
+                    console.log(JSON.stringify(data.smartMoneyHoldings, null, 2));
+                }
+                return;
+            } catch (err) {
+                console.error(chalk.red('Macro fetch failed:'), err.response?.data?.error || err.message);
+                return;
+            }
+        }
 
         console.log(chalk.cyan(`\n🔍 Fetching ${cType} market data...`));
 
@@ -150,9 +155,6 @@ program
         }
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// LOOKUP COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('lookup <id>')
     .description('Deep dive into an asset via Nansen or Yahoo Finance')
@@ -169,13 +171,13 @@ program
                 const q = data.data;
                 const table = new Table({ style: { border: ['grey'] } });
                 table.push(
-                    [chalk.grey('Symbol'),         chalk.white(q.symbol)],
-                    [chalk.grey('Name'),            chalk.white(q.longName || q.shortName || '—')],
-                    [chalk.grey('Price'),           chalk.green(`$${q.regularMarketPrice}`)],
-                    [chalk.grey('Change %'),        (q.regularMarketChangePercent >= 0 ? chalk.green : chalk.red)(`${q.regularMarketChangePercent?.toFixed(2)}%`)],
-                    [chalk.grey('52W High'),        chalk.white(`$${q.fiftyTwoWeekHigh}`)],
-                    [chalk.grey('52W Low'),         chalk.white(`$${q.fiftyTwoWeekLow}`)],
-                    [chalk.grey('Market Cap'),      chalk.white(q.marketCap ? `$${(q.marketCap / 1e9).toFixed(2)}B` : '—')],
+                    [chalk.grey('Symbol'), chalk.white(q.symbol)],
+                    [chalk.grey('Name'), chalk.white(q.longName || q.shortName || '—')],
+                    [chalk.grey('Price'), chalk.green(`$${q.regularMarketPrice}`)],
+                    [chalk.grey('Change %'), (q.regularMarketChangePercent >= 0 ? chalk.green : chalk.red)(`${q.regularMarketChangePercent?.toFixed(2)}%`)],
+                    [chalk.grey('52W High'), chalk.white(`$${q.fiftyTwoWeekHigh}`)],
+                    [chalk.grey('52W Low'), chalk.white(`$${q.fiftyTwoWeekLow}`)],
+                    [chalk.grey('Market Cap'), chalk.white(q.marketCap ? `$${(q.marketCap / 1e9).toFixed(2)}B` : '—')],
                 );
                 console.log(gradient.atlas(`\n─── TradFi Insight: ${id.toUpperCase()} ─────────────`));
                 console.log(table.toString());
@@ -189,8 +191,47 @@ program
     });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// POSITIONS COMMAND
+// WALLET COMMAND
 // ─────────────────────────────────────────────────────────────────────────────
+program
+    .command('wallet <address>')
+    .description('Deep dive into a wallet using Nansen Profiler \u0026 Balances')
+    .action(async (address) => {
+        const token = checkAuth();
+        const axios = require('axios');
+
+        console.log(chalk.cyan(`\n🔍 Profiling wallet: ${chalk.bold(address)}...`));
+
+        try {
+            const { data } = await axios.get(`${BACKEND_URL}/market/wallet/${address}`, { headers: authHeaders(token) });
+            console.log(gradient.atlas(`\n─── Nansen Wallet Insights ──────────────────────`));
+            console.log(JSON.stringify(data, null, 2));
+        } catch (err) {
+            console.error(chalk.red('Wallet profiling failed:'), err.response?.data?.error || err.message);
+        }
+    });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTITY COMMAND
+// ─────────────────────────────────────────────────────────────────────────────
+program
+    .command('entity <name>')
+    .description('Track token flows for a specific entity (e.g., Binance, Alameda)')
+    .action(async (name) => {
+        const token = checkAuth();
+        const axios = require('axios');
+
+        console.log(chalk.cyan(`\n🔍 Tracking entity flows: ${chalk.bold(name)}...`));
+
+        try {
+            const { data } = await axios.get(`${BACKEND_URL}/market/entities/${name}`, { headers: authHeaders(token) });
+            console.log(gradient.atlas(`\n─── Nansen Entity Flows: ${name.toUpperCase()} ───`));
+            console.log(JSON.stringify(data.flows, null, 2));
+        } catch (err) {
+            console.error(chalk.red('Entity tracking failed:'), err.response?.data?.error || err.message);
+        }
+    });
+
 program
     .command('positions')
     .description('View your simulated portfolio and open positions')
@@ -230,9 +271,6 @@ program
         }
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// WATCH COMMAND
-// ─────────────────────────────────────────────────────────────────────────────
 program
     .command('watch <asset>')
     .description('Live-poll an asset every 30s (Ctrl+C to stop)')
@@ -273,9 +311,6 @@ program
         setInterval(fetch, intervalMs);
     });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// TRIGGER COMMANDS
-// ─────────────────────────────────────────────────────────────────────────────
 const triggerCmd = program
     .command('trigger')
     .description('Manage autonomous smart-money paper-trading triggers');
@@ -352,8 +387,8 @@ triggerCmd
 
             data.triggers.forEach((t) => {
                 const statusColor =
-                    t.status === 'ACTIVE'   ? chalk.green :
-                    t.status === 'EXECUTED' ? chalk.blue  : chalk.red;
+                    t.status === 'ACTIVE' ? chalk.green :
+                        t.status === 'EXECUTED' ? chalk.blue : chalk.red;
 
                 table.push([
                     chalk.grey(t._id),
@@ -367,7 +402,7 @@ triggerCmd
                 ]);
             });
 
-            console.log(gradient.atlas('\n─── Your Triggers ──────────────────────────────'));
+            console.log(gradient.atlas('\n─── Triggers ──────────────────────────────'));
             console.log(table.toString());
             console.log('');
         } catch (err) {

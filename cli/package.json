@@ -1,7 +1,7 @@
 {
-  "name": "cli",
-  "version": "1.0.0",
-  "description": "",
+  "name": "alpha-cli-toolkit",
+  "version": "1.2.0",
+  "description": "Autonomous Agent Toolkit for Crypto & TradFi market data powered by Nansen.",
   "main": "index.js",
   "scripts": {
     "start": "node bin/alpha.js",
@@ -9,11 +9,27 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "bin": {
-    "alpha": "./bin/alpha.js"
+    "alpha": "bin/alpha.js"
   },
-  "keywords": [],
-  "author": "",
+  "files": [
+    "bin",
+    "utils",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "crypto",
+    "nansen",
+    "tradfi",
+    "autonomous-agent",
+    "cli-toolkit"
+  ],
+  "author": "Linkxee-Tech",
   "license": "ISC",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Linkxee-Tech/alpha-cli.git"
+  },
   "type": "commonjs",
   "dependencies": {
     "axios": "^1.14.0",

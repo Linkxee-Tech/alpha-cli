@@ -44,10 +44,6 @@ function setToken(token) {
 
 // ─── Browser-based Phantom auth flow ─────────────────────────────────────────
 
-/**
- * Spins up a local temporary server and opens the Next.js UI
- * to capture the Phantom wallet authentication token.
- */
 async function authenticateViaBrowser() {
     return new Promise(async (resolve, reject) => {
         const server = http.createServer((req, res) => {
@@ -82,9 +78,9 @@ async function authenticateViaBrowser() {
         });
 
         server.listen(0, async () => {
+            const FRONTEND_URL = process.env.FRONTEND_URL || 'https://alpha-cli-ui.vercel.app';
             const port = server.address().port;
-            const callbackUrl = `http://localhost:${port}`;
-            const loginUrl = `http://localhost:3000/?callback=${encodeURIComponent(callbackUrl)}`;
+            const loginUrl = `${FRONTEND_URL}/?callback=${encodeURIComponent(`http://localhost:${port}`)}`;
 
             // Dynamic import for `open` (ESM-only since v9)
             const open = (await import('open')).default;
