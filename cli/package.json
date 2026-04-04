@@ -1,6 +1,6 @@
 {
   "name": "alpha-cli-toolkit",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Autonomous Agent Toolkit for Crypto & TradFi market data powered by Nansen.",
   "main": "index.js",
   "scripts": {

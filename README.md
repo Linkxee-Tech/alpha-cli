@@ -80,21 +80,32 @@ npm link                 # Makes `alpha` available globally
 | `alpha logout`  | Clear stored authentication session       |
 | `alpha status`  | Check auth status & backend health        |
 
-### Market Data
+### Market Data & Discovery
 
 | Command                | Description                                       |
 |------------------------|---------------------------------------------------|
 | `alpha market`         | Trending crypto via Nansen smart-money data        |
+| `alpha flow`           | **[NEW]** Smart Money Netflow Explorer (1h/24h/7d) |
+| `alpha history <sym>`  | **[NEW]** Historical SM Analysis & Conviction Score|
+| `alpha market --nft`   | NFT Market Indexes via Nansen                      |
+| `alpha market --macro` | Smart Money Holdings & Macro (Nansen)              |
 | `alpha market --sp500` | Trending S&P 500 stocks via Yahoo Finance          |
 | `alpha market --nsd`   | Trending NASDAQ stocks via Yahoo Finance           |
 | `alpha lookup <id>`    | Deep dive into an asset (crypto or stock ticker)   |
 | `alpha watch <asset>`  | Live-poll asset price every 30s (Ctrl+C to stop)   |
 
+### Portfolio & Wallet Insights
+
+| Command                | Description                                       |
+|------------------------|---------------------------------------------------|
+| `alpha positions`      | View simulated portfolio & open positions         |
+| `alpha wallet <addr>`  | Deep profile a wallet via Nansen                   |
+| `alpha entity <name>`  | Track entity token flows (e.g. Binance)            |
+
 ### Paper Trading & Triggers
 
 | Command                                              | Description                              |
 |------------------------------------------------------|------------------------------------------|
-| `alpha positions`                                    | View simulated portfolio & open positions |
 | `alpha trigger buy <id> <condition> <target> <amt> <market>`  | Set a BUY trigger                |
 | `alpha trigger sell <id> <condition> <target> <amt> <market>` | Set a SELL trigger               |
 | `alpha trigger list`                                 | List all your triggers                    |
@@ -103,34 +114,35 @@ npm link                 # Makes `alpha` available globally
 **Condition types:** `PRICE_ABOVE`, `PRICE_BELOW`, `SMART_MONEY_INFLOW`, `EXCHANGE_OUTFLOW`  
 **Market types:** `CRYPTO`, `SP500`, `NASDAQ`
 
-#### Example
+---
 
-```bash
-# Buy 10 units of SOL when price drops below $140
-alpha trigger buy SOL PRICE_BELOW 140 10 CRYPTO
+## Production Guardrails
 
-# Sell 5 shares of AAPL when price goes above $200
-alpha trigger sell AAPL PRICE_ABOVE 200 5 SP500
-```
+The toolkit is **Production Ready** with built-in security and robustness:
+
+1. **Rate Limiting**: Backend protected by `express-rate-limit` (100 req / 15 min).
+2. **Input Validation**: All trigger and market queries are sanitized via `express-validator`.
+3. **Resilient Startup**: Backend awaits MongoDB connectivity before accepting traffic.
+4. **Fail-Fast CLI**: CLI automatically falls back to production URLs if `.env` is missing.
 
 ---
 
-## Nansen API Integration
+## Nansen API Integration (v1)
 
-The backend integrates with **10 Nansen API endpoints** for on-chain analytics:
+The backend leverages **Nansen v1 Smart Money** endpoints for high-fidelity data:
 
-1. `GET /trending/tokens` — Hot contracts & trending tokens
-2. `GET /smart-money/token-flows` — Smart money inflows/outflows
-3. `GET /wallet/:address/balances` — Token balances for a wallet
-4. `GET /token/:id/exchange-flows` — Exchange flow data
-5. `GET /token/:id/holders` — Token holder distribution
-6. `GET /smart-money/holdings` — Cross-chain smart money holdings
-7. `GET /wallet/:address/profiler` — Wallet profiler
-8. `GET /nft/indexes` — NFT market indexes
-9. `GET /entities/:name/flows` — Entity-level token flow
-10. `GET /token/:id/macro-signals` — Token God Mode macro signals
+1. `POST /api/v1/smart-money/netflow` — Aggregated token flows (accumulation/distribution)
+2. `POST /api/v1/smart-money/historical-holdings` — Time-series snapshots & trend analysis
+3. `POST /api/v1/smart-money/holdings` — Cross-chain whale balances
+4. `POST /api/v1/smart-money/dex-trades` — Real-time DEX activity
+5. `GET /v1/trending/tokens` — Hot contracts
+6. `GET /v1/wallet/:address/balances` — Wallet profiling
+7. `GET /v1/token/:id/exchange-flows` — CEX flows
+8. `GET /v1/nft/indexes` — NFT macro proxy
+9. `GET /v1/entities/:name/flows` — Entity tracking
+10. `GET /v1/token/:id/macro-signals` — God Mode signals
 
-> **Note:** If `NANSEN_API_KEY` is not set in `.env`, the backend will return mock data so the CLI can be demonstrated without API access.
+> **Note:** Requires a `NANSEN_API_KEY` for live data. Defaults to mock data for demo if key is missing.
 
 ---
 

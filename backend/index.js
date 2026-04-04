@@ -3,34 +3,27 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
 const connectDB = require('./src/config/db');
 const { startTriggerEngine } = require('./src/services/trigger-engine.service');
 
 const app = express();
 
-const startServer = async () => {
-  try {
-    // 1. Connect to Database (Required)
-    await connectDB();
-    
-    // 2. Start Background Services
-    startTriggerEngine();
+// Production Rate Limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests from this IP, please try again after 15 minutes' }
+});
 
-    // 3. Start Listening
-    const PORT = process.env.PORT || 4000;
-    app.listen(PORT, () => {
-      console.log(`🚀 Alpha Backend running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('FAILED_TO_START_SERVER:', error.message);
-    process.exit(1);
-  }
-};
+// Apply rate limiter to all requests
+app.use(limiter);
 
 // Manual CORS Header Injection Middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  // Dynamically allow provided frontend OR keep everything open for development if needed
   const allowedOrigin = process.env.FRONTEND_URL || '*';
 
   res.setHeader('Access-Control-Allow-Origin', allowedOrigin);
@@ -38,7 +31,6 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 
-  // Fast pre-flight response
   if (req.method === 'OPTIONS') {
     return res.status(204).end();
   }
@@ -73,6 +65,25 @@ app.use((err, req, res, next) => {
     status: err.status || 500
   });
 });
+
+const startServer = async () => {
+  try {
+    // 1. Connect to Database (Required)
+    await connectDB();
+    
+    // 2. Start Background Services
+    startTriggerEngine();
+
+    // 3. Start Listening
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Alpha Backend running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('FAILED_TO_START_SERVER:', error.message);
+    process.exit(1);
+  }
+};
 
 // Finalize Startup
 startServer();

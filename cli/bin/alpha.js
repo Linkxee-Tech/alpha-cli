@@ -111,19 +111,21 @@ program
     .option('-n, --nsd', 'Trending NASDAQ assets via Yahoo Finance')
     .option('-f, --nft', 'NFT Market Indexes (Nansen)')
     .option('-m, --macro', 'Smart Money Holdings \u0026 Macro (Nansen)')
+    .option('--min-usd <value>', 'Filter Smart Money by minimum USD value', '1000')
+    .option('--chains <list>', 'Comma-separated chains (e.g. solana,ethereum)', 'solana')
     .action(async (options) => {
         const token = checkAuth();
         const axios = require('axios');
 
-        let url = `${BACKEND_URL}/market/crypto/trending`;
+        let url = `${BACKEND_URL}/market/crypto/trending?min_usd=${options.minUsd}&chains=${options.chains}`;
         let cType = 'CRYPTO';
 
         if (options.sp500) { url = `${BACKEND_URL}/market/tradfi/sp500`; cType = 'S&P 500'; }
         else if (options.nsd) { url = `${BACKEND_URL}/market/tradfi/nsd`; cType = 'NASDAQ'; }
         else if (options.nft || options.macro) {
-            console.log(chalk.cyan(`\n🔍 Fetching Nansen Market Macro Insights...`));
+            console.log(chalk.cyan(`\n🔍 Fetching Nansen Market Macro Insights (Chains: ${options.chains})...`));
             try {
-                const { data } = await axios.get(`${BACKEND_URL}/market/macro`, { headers: authHeaders(token) });
+                const { data } = await axios.get(`${BACKEND_URL}/market/macro?chains=${options.chains}`, { headers: authHeaders(token) });
                 if (options.nft) {
                     console.log(gradient.atlas(`\n─── Nansen NFT Indexes ──────────────────────────`));
                     console.log(JSON.stringify(data.nftIndexes, null, 2));
@@ -150,6 +152,14 @@ program
             }
 
             buildMarketTable(items, cType);
+
+            if (data.netflow?.length) {
+                console.log(gradient.atlas(`\n─── Whale Netflows (Min: $${options.minUsd}) ─────`));
+                data.netflow.slice(0, 5).forEach((flow) => {
+                    const direction = flow.net_flow_usd >= 0 ? chalk.green('INFLOW') : chalk.red('OUTFLOW');
+                    console.log(`  ${chalk.bold(flow.token_name || flow.symbol)}: ${direction} $${Math.abs(flow.net_flow_usd).toLocaleString()}`);
+                });
+            }
         } catch (err) {
             console.error(chalk.red('Failed to fetch market data:'), err.response?.data?.error || err.message);
         }
@@ -208,6 +218,154 @@ program
             console.log(JSON.stringify(data, null, 2));
         } catch (err) {
             console.error(chalk.red('Wallet profiling failed:'), err.response?.data?.error || err.message);
+        }
+    });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FLOW COMMAND (Smart Money Netflow Explorer)
+// ─────────────────────────────────────────────────────────────────────────────
+program
+    .command('flow')
+    .description('Deep-dive into capital rotation via Smart Money Netflows')
+    .option('--chains <list>', 'Comma-separated chains (e.g. solana,ethereum)', 'solana')
+    .option('--sort <period>', 'Sorting timeframe: 1h, 24h, 7d, 30d', '24h')
+    .option('--order <dir>', 'Sort direction: DESC, ASC', 'DESC')
+    .option('--sector <name>', 'Filter by token sector (e.g. DeFi, AI, Meme)')
+    .option('--labels <list>', 'Smart Money labels to include', 'Fund,Smart Trader')
+    .option('--stablecoins', 'Include stablecoins in the analysis', false)
+    .action(async (options) => {
+        const token = checkAuth();
+        const axios = require('axios');
+
+        console.log(chalk.cyan(`\n🔍 Exploring Smart Money rotation...`));
+        console.log(chalk.grey(`   Timeframe: ${options.sort} | Chains: ${options.chains} | Sort: ${options.order}\n`));
+
+        try {
+            const { data } = await axios.get(`${BACKEND_URL}/market/smart-money/netflow`, {
+                params: {
+                    chains: options.chains,
+                    sort: options.sort,
+                    direction: options.order,
+                    sector: options.sector,
+                    labels: options.labels,
+                    include_stablecoins: options.stablecoins
+                },
+                headers: authHeaders(token)
+            });
+
+            const items = data.data || [];
+
+            if (!items.length) {
+                console.log(chalk.yellow('   No flow data found for these filters.\n'));
+                return;
+            }
+
+            const table = new Table({
+                head: [
+                    chalk.bold.white('Asset'),
+                    chalk.bold.white('1H Flow'),
+                    chalk.bold.white('24H Flow'),
+                    chalk.bold.white('7D Flow'),
+                    chalk.bold.white('Sector'),
+                ],
+                colWidths: [18, 16, 16, 16, 20],
+                style: { border: ['grey'] },
+            });
+
+            items.slice(0, 15).forEach((item) => {
+                const formatFlow = (val) => {
+                    if (!val) return chalk.grey('—');
+                    const colorizer = val >= 0 ? chalk.green : chalk.red;
+                    const prefix = val >= 0 ? '+' : '';
+                    return colorizer(`${prefix}$${Math.abs(val / 1e3).toFixed(1)}k`);
+                };
+
+                table.push([
+                    chalk.bold.cyan(item.token_symbol || '???'),
+                    formatFlow(item.net_flow_1h_usd),
+                    formatFlow(item.net_flow_24h_usd),
+                    formatFlow(item.net_flow_7d_usd),
+                    chalk.grey(item.token_sectors?.[0] || '—'),
+                ]);
+            });
+
+            console.log(gradient.atlas('─── Smart Money Netflow Explorer ────────────────'));
+            console.log(table.toString());
+            console.log(chalk.grey(`\n * Flows in USD (k = thousands). Positive = Accumulation, Negative = Distribution.`));
+            console.log('');
+        } catch (err) {
+            console.error(chalk.red('Flow exploration failed:'), err.response?.data?.error || err.message);
+        }
+    });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HISTORY COMMAND (Smart Money Historical Analysis)
+// ─────────────────────────────────────────────────────────────────────────────
+program
+    .command('history <symbol>')
+    .description('Analyze historical Smart Money conviction for a token')
+    .option('--from <date>', 'Start date (YYYY-MM-DD)', '')
+    .option('--to <date>', 'End date (YYYY-MM-DD)', '')
+    .option('--chains <list>', 'Comma-separated chains', 'solana')
+    .action(async (symbol, options) => {
+        const token = checkAuth();
+        const axios = require('axios');
+
+        console.log(chalk.cyan(`\n🔍 Analyzing historical Smart Money conviction for ${chalk.bold(symbol.toUpperCase())}...`));
+
+        try {
+            const { data } = await axios.get(`${BACKEND_URL}/market/smart-money/historical-holdings`, {
+                params: {
+                    symbol,
+                    from: options.from,
+                    to: options.to,
+                    chains: options.chains
+                },
+                headers: authHeaders(token)
+            });
+
+            const items = data.history || [];
+
+            if (!items.length) {
+                console.log(chalk.yellow(`   No historical data found for ${symbol}.\n`));
+                return;
+            }
+
+            // Display Conviction Score
+            const scoreColor = data.convictionScore === 'HIGH' ? chalk.green : data.convictionScore === 'MEDIUM' ? chalk.yellow : chalk.red;
+            console.log(`\n  🎯 Conviction Score: ${scoreColor.bold(data.convictionScore)}`);
+            console.log(chalk.grey(`     (${data.consecutiveDays} consecutive days of accumulation)\n`));
+
+            const table = new Table({
+                head: [
+                    chalk.bold.white('Date'),
+                    chalk.bold.white('SM Balance'),
+                    chalk.bold.white('24H Change'),
+                    chalk.bold.white('USD Value'),
+                ],
+                colWidths: [14, 18, 16, 18],
+                style: { border: ['grey'] },
+            });
+
+            items.slice(0, 15).forEach((day) => {
+                const change = day.balance_24h_percent_change;
+                const changeColor = change >= 0 ? chalk.green : chalk.red;
+                const arrow = change >= 0 ? '▲' : '▼';
+
+                table.push([
+                    chalk.white(day.date),
+                    chalk.cyan(day.balance?.toLocaleString()),
+                    changeColor(`${arrow} ${(change * 100).toFixed(2)}%`),
+                    chalk.white(`$${(day.value_usd / 1e3).toFixed(1)}k`),
+                ]);
+            });
+
+            console.log(gradient.atlas(`─── Historical Trend: ${symbol.toUpperCase()} ──────────────`));
+            console.log(table.toString());
+            console.log(chalk.grey(`\n * Showing the latest 15 snapshots. Historical data up to 4 years available.`));
+            console.log('');
+        } catch (err) {
+            console.error(chalk.red('Historical analysis failed:'), err.response?.data?.error || err.message);
         }
     });
 

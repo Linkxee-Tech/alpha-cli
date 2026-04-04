@@ -11,6 +11,8 @@ router.get('/lookup/:id', marketController.lookupAsset);
 
 router.get('/wallet/:address', marketController.getWalletInsights);
 router.get('/entities/:name', marketController.getEntityFlows);
+router.get('/smart-money/netflow', marketController.getDeepNetflow);
+router.get('/smart-money/historical-holdings', marketController.getHistoricalHoldings);
 router.get('/macro', marketController.getMarketMacro);
 
 module.exports = router;
