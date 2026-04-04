@@ -6,11 +6,26 @@ const morgan = require('morgan');
 const connectDB = require('./src/config/db');
 const { startTriggerEngine } = require('./src/services/trigger-engine.service');
 
-// Connect to MongoDB
-connectDB();
-startTriggerEngine();
-
 const app = express();
+
+const startServer = async () => {
+  try {
+    // 1. Connect to Database (Required)
+    await connectDB();
+    
+    // 2. Start Background Services
+    startTriggerEngine();
+
+    // 3. Start Listening
+    const PORT = process.env.PORT || 4000;
+    app.listen(PORT, () => {
+      console.log(`🚀 Alpha Backend running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('FAILED_TO_START_SERVER:', error.message);
+    process.exit(1);
+  }
+};
 
 // Manual CORS Header Injection Middleware
 app.use((req, res, next) => {
@@ -59,8 +74,5 @@ app.use((err, req, res, next) => {
   });
 });
 
-const PORT = process.env.PORT || 4000;
-
-app.listen(PORT, () => {
-  console.log(`Backend Server running on port ${PORT}`);
-});
+// Finalize Startup
+startServer();
