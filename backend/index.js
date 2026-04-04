@@ -13,8 +13,17 @@ startTriggerEngine();
 const app = express();
 
 // Middleware
-app.use(helmet());
-app.use(cors());
+// Move CORS before Helmet to handle pre-fights correctly
+app.use(cors({
+  origin: process.env.FRONTEND_URL || '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
+
+app.use(helmet({
+  crossOriginResourcePolicy: false, // If using external resources or subdomains
+}));
 app.use(express.json());
 app.use(morgan('dev'));
 
